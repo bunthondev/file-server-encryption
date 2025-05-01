@@ -23,7 +23,7 @@ Route::middleware([ApiAuthenticate::class])->group(function () {
     // File routes
     Route::post('/files', [FileController::class, 'upload']);
     Route::get('/files', [FileController::class, 'index']);
-    Route::get('/files/{file}/download', [FileController::class, 'download']);
-    Route::get('/files/{file}/view', [FileController::class, 'view']);
-    Route::delete('/files/{file}', [FileController::class, 'destroy']);
+    Route::get('/{bucket}/{file}/download', [FileController::class, 'downloadByPath']);
+    Route::get('/{bucket}/{file}/view', [FileController::class, 'viewByPath']);
+    Route::delete('/files/{bucket}/{file}', [FileController::class, 'destroy']);
 });

@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Bucket;
+use App\Models\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
@@ -15,7 +17,7 @@ class FileEncryptionService
 
     public function __construct()
     {
-        $this->secretWord = config('app.encryption_secret', 'default-secret');
+        $this->secretWord = config('app.encryption_secret');
         $this->encryptionKey = $this->generateEncryptionKey();
     }
 
@@ -54,47 +56,71 @@ class FileEncryptionService
         );
     }
 
-    public function encryptAndStore(UploadedFile $file, string|int $userId): array
+    private function getFileExtension(string $mimeType): string
     {
+        $extensions = [
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/gif' => 'gif',
+            'application/pdf' => 'pdf',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            'text/plain' => 'txt',
+            'text/csv' => 'csv',
+            'application/json' => 'json',
+            'application/xml' => 'xml',
+            'application/zip' => 'zip',
+            'application/x-rar-compressed' => 'rar',
+            'application/x-7z-compressed' => '7z',
+        ];
+
+        return $extensions[$mimeType] ?? 'bin';
+    }
+
+    public function encryptAndStore(UploadedFile $file, int $bucketId): File
+    {
+        $bucket = Bucket::findOrFail($bucketId);
         $originalName = $file->getClientOriginalName();
-        $encryptedName = Str::random(40);
         $mimeType = $file->getMimeType();
+        $extension = $this->getFileExtension($mimeType);
+        $encryptedName = Str::random(40) . '.' . $extension;
         $size = $file->getSize();
-
+        
         // Read file content
-        $content = file_get_contents($file->getRealPath());
-
-        // Encrypt the content with custom encryption
+        $content = $file->getContent();
+        
+        // Encrypt content
         $encryptedContent = $this->encryptContent($content);
-
-        // Store the encrypted file
-        $path = "files/{$userId}/{$encryptedName}";
+        
+        // Store encrypted file using bucket name in path
+        $path = "{$bucket->name}/{$encryptedName}";
         Storage::put($path, $encryptedContent);
-
-        return [
+        
+        // Create file record
+        return File::create([
+            'bucket_id' => $bucketId,
             'original_name' => $originalName,
             'encrypted_name' => $encryptedName,
             'mime_type' => $mimeType,
             'size' => $size,
             'path' => $path,
-        ];
+        ]);
     }
 
-    public function decryptAndDownload(string $path): array
+    public function decryptAndDownload(File $file): array
     {
-        if (!Storage::exists($path)) {
-            throw new \Exception('File not found');
-        }
-
         // Get encrypted content
-        $encryptedContent = Storage::get($path);
-
-        // Decrypt the content with custom decryption
+        $encryptedContent = Storage::get($file->path);
+        
+        // Decrypt content
         $decryptedContent = $this->decryptContent($encryptedContent);
-
+        
         return [
             'content' => $decryptedContent,
-            'mime_type' => Storage::mimeType($path),
+            'name' => $file->original_name,
+            'mime_type' => $file->mime_type,
         ];
     }
 } 
