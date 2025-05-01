@@ -11,10 +11,11 @@ return new class extends Migration
         Schema::create('files', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            $table->string('bucket');
             $table->string('original_name');
             $table->string('encrypted_name');
             $table->string('mime_type');
-            $table->bigInteger('size');
+            $table->integer('size');
             $table->string('path');
             $table->timestamps();
         });

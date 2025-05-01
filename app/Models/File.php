@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class File extends Model
 {
     protected $fillable = [
-        'bucket_id',
+        'bucket',
+        'user_id',
         'original_name',
         'encrypted_name',
         'mime_type',
@@ -23,6 +24,6 @@ class File extends Model
 
     public function user()
     {
-        return $this->bucket->user();
+        return $this->belongsTo(User::class);
     }
 } 

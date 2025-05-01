@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\Bucket;
 use App\Models\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -79,9 +78,8 @@ class FileEncryptionService
         return $extensions[$mimeType] ?? 'bin';
     }
 
-    public function encryptAndStore(UploadedFile $file, int $bucketId): File
+    public function encryptAndStore(UploadedFile $file, string $bucketName, int $userId): File
     {
-        $bucket = Bucket::findOrFail($bucketId);
         $originalName = $file->getClientOriginalName();
         $mimeType = $file->getMimeType();
         $extension = $this->getFileExtension($mimeType);
@@ -95,12 +93,13 @@ class FileEncryptionService
         $encryptedContent = $this->encryptContent($content);
         
         // Store encrypted file using bucket name in path
-        $path = "{$bucket->name}/{$encryptedName}";
+        $path = "{$bucketName}/{$encryptedName}";
         Storage::put($path, $encryptedContent);
         
         // Create file record
         return File::create([
-            'bucket_id' => $bucketId,
+            'user_id' => $userId,
+            'bucket' => $bucketName,
             'original_name' => $originalName,
             'encrypted_name' => $encryptedName,
             'mime_type' => $mimeType,

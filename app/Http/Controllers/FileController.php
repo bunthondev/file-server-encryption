@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Bucket;
 use App\Models\File;
 use App\Services\FileEncryptionService;
 use Illuminate\Http\Request;
@@ -30,39 +29,44 @@ class FileController extends Controller
             return response()->json(['message' => 'No file uploaded'], 400);
         }
 
+        $user = Auth::guard('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
         // Sanitize bucket name to be URL and filesystem friendly
         $bucketName = Str::slug($request->input('bucket'));
 
-        // Find or create bucket
-        $bucket = Bucket::firstOrCreate(
-            ['name' => $bucketName, 'user_id' => Auth::guard('sanctum')->user()->id],
-            ['description' => 'Created automatically']
-        );
-
         $file = $this->encryptionService->encryptAndStore(
             $request->file('file'),
-            $bucket->id
+            $bucketName,
+            $user->id
         );
 
         return response()->json([
             'message' => 'File uploaded successfully',
             'file' => $file,
-            'bucket' => $bucket->name,
-            'download_url' => "{$bucket->name}/{$file->encrypted_name}/download",
-            'view_url' => "{$bucket->name}/{$file->encrypted_name}/view"
+            'bucket' => $bucketName,
+            'download_url' => "/files/{$bucketName}/{$file->encrypted_name}/download",
+            'view_url' => "/files/{$bucketName}/{$file->encrypted_name}/view"
         ], 201);
     }
 
     public function downloadByPath(string $bucketName, string $fileName)
     {
+        $user = Auth::guard('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
         // Sanitize bucket name
         $bucketName = Str::slug($bucketName);
 
         // Find the file
-        $file = File::whereHas('bucket', function ($query) use ($bucketName) {
-            $query->where('name', $bucketName)
-                  ->where('user_id', Auth::guard('sanctum')->user()->id);
-        })->where('encrypted_name', $fileName)->firstOrFail();
+        $file = File::where('bucket', $bucketName)
+            ->where('user_id', $user->id)
+            ->where('encrypted_name', $fileName)
+            ->firstOrFail();
 
         $fileData = $this->encryptionService->decryptAndDownload($file);
 
@@ -73,14 +77,19 @@ class FileController extends Controller
 
     public function viewByPath(string $bucketName, string $fileName)
     {
+        $user = Auth::guard('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
         // Sanitize bucket name
         $bucketName = Str::slug($bucketName);
 
         // Find the file
-        $file = File::whereHas('bucket', function ($query) use ($bucketName) {
-            $query->where('name', $bucketName)
-                  ->where('user_id', Auth::guard('sanctum')->user()->id);
-        })->where('encrypted_name', $fileName)->firstOrFail();
+        $file = File::where('bucket', $bucketName)
+            ->where('user_id', $user->id)
+            ->where('encrypted_name', $fileName)
+            ->firstOrFail();
 
         $fileData = $this->encryptionService->decryptAndDownload($file);
 
@@ -95,36 +104,46 @@ class FileController extends Controller
             'bucket' => 'required|string|max:255',
         ]);
 
+        $user = Auth::guard('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
         // Sanitize bucket name
         $bucketName = Str::slug($request->input('bucket'));
 
-        $bucket = Bucket::where('name', $bucketName)
-            ->where('user_id', Auth::guard('sanctum')->user()->id)
-            ->firstOrFail();
+        $files = File::where('bucket', $bucketName)
+            ->where('user_id', $user->id)
+            ->get();
 
         // Add download and view URLs to each file
-        $files = $bucket->files->map(function ($file) use ($bucket) {
-            $file->download_url = "/files/{$bucket->name}/{$file->encrypted_name}/download";
-            $file->view_url = "/files/{$bucket->name}/{$file->encrypted_name}/view";
+        $files = $files->map(function ($file) use ($bucketName) {
+            $file->download_url = "/files/{$bucketName}/{$file->encrypted_name}/download";
+            $file->view_url = "/files/{$bucketName}/{$file->encrypted_name}/view";
             return $file;
         });
 
         return response()->json([
-            'bucket' => $bucket->name,
+            'bucket' => $bucketName,
             'files' => $files
         ]);
     }
 
     public function destroy(Request $request, string $bucketName, string $fileName)
     {
+        $user = Auth::guard('sanctum')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
         // Sanitize bucket name
         $bucketName = Str::slug($bucketName);
 
         // Find the file
-        $file = File::whereHas('bucket', function ($query) use ($bucketName) {
-            $query->where('name', $bucketName)
-                  ->where('user_id', Auth::guard('sanctum')->user()->id);
-        })->where('encrypted_name', $fileName)->firstOrFail();
+        $file = File::where('bucket', $bucketName)
+            ->where('user_id', $user->id)
+            ->where('encrypted_name', $fileName)
+            ->firstOrFail();
 
         // Delete file from storage
         Storage::delete($file->path);
