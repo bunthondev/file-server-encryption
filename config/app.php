@@ -105,6 +105,8 @@ return [
         ),
     ],
 
+    'encryption_secret' => env('ENCRYPTION_SECRET', 'default-secret'),
+
     /*
     |--------------------------------------------------------------------------
     | Maintenance Mode Driver
